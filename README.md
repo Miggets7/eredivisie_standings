@@ -54,6 +54,8 @@ docker run -p 8000:8000 \
 
 - **GET /**: Health check endpoint
 - **GET /standings**: Get current standings (JSON format)
+- **GET /kkd-standings**: Get Keuken Kampioen Divisie standings (JSON format)
+
 
 ## Development
 

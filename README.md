@@ -1,4 +1,4 @@
-# Eredivisie Standings 
+# Eredivisie & Keuken Kampioen Divisie Standings 
 
 This application provides football standings data for the Dutch Eredivisie and Keuken Kampioen Divisie leagues. It scrapes the official websites and formats the data for display on e-ink screens.
 

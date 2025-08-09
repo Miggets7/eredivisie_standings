@@ -46,10 +46,6 @@ docker run -p 8000:8000 \
   eredivisie-standing
 ```
 
-## Endpoints
-
-- **GET /standings**: Get current standings
-
 ### API Endpoints
 
 - **GET /**: Health check endpoint

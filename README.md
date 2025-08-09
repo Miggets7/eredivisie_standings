@@ -1,10 +1,10 @@
 # Eredivisie Standings 
 
-This application provides Eredivisie football standings data. It scrapes the official Eredivisie website and formats the data for display on e-ink screens.
+This application provides football standings data for the Dutch Eredivisie and Keuken Kampioen Divisie leagues. It scrapes the official websites and formats the data for display on e-ink screens.
 
 ## Features
 
-- Real-time Eredivisie standings data
+- Real-time standings data for both Eredivisie and Keuken Kampioen Divisie
 - Configurable number of teams to display
 
 ## Setup

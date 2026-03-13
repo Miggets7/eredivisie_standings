@@ -1,63 +1,5 @@
-# Python-generated files
-
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-#  Usually these files are written by a script so you don't need to check them in.
-*.manifest
-*.spec
-
-# Pyenv
-.python-version
-
-# Pytest
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Mypy cache
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak
-venv.bak
+# Rust build artifacts
+/target
 
 # IDE / Editor specific
 .idea/
@@ -80,24 +22,7 @@ Thumbs.db
 # Logs
 logs/
 *.log
-npm-debug.log*
 
-# Local development settings
+# Environment
+.env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Cache directories
-.cache/
-.parcel-cache/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# Poetry
-poetry.lock
-uv.lock
-
-# Slimtoolkit
-slim.report.json

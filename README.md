@@ -1,4 +1,4 @@
-# Eredivisie & Keuken Kampioen Divisie Standings 
+# Eredivisie & Keuken Kampioen Divisie Standings
 
 This application provides football standings data for the Dutch Eredivisie and Keuken Kampioen Divisie leagues. It scrapes the official websites and formats the data for display on e-ink screens.
 
@@ -11,7 +11,7 @@ This application provides football standings data for the Dutch Eredivisie and K
 
 ### Prerequisites
 
-- Python 3.13 or higher
+- Rust 1.80 or higher
 - Docker (optional for containerized deployment)
 
 ### Environment Variables
@@ -19,23 +19,22 @@ This application provides football standings data for the Dutch Eredivisie and K
 Set the following environment variables before running the application:
 
 ```
-API_KEY="your_api_key"  # For API authentication
+API_KEY="your_api_key"  # For API authentication (optional)
 ```
 
-### Installation
-
-1. Clone the repository
-2. Install dependencies:
+### Building
 
 ```bash
-uv sync
+cargo build --release
 ```
 
 ### Running the Application
 
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+cargo run --release
 ```
+
+The server starts on `http://0.0.0.0:8000`.
 
 ### Docker Deployment
 
@@ -49,15 +48,27 @@ docker run -p 8000:8000 \
 ### API Endpoints
 
 - **GET /**: Health check endpoint
-- **GET /standings**: Get current standings (JSON format)
+- **GET /standings**: Get current Eredivisie standings (JSON format)
 - **GET /kkd-standings**: Get Keuken Kampioen Divisie standings (JSON format)
 
+All endpoints accept optional query parameters:
+- `api_key` — API key for authentication (required if `API_KEY` env var is set)
+- `top` — Number of top teams to return (e.g., `?top=5`)
 
 ## Development
 
 ### Adding New Features
 
-1. Implement new endpoints in `main.py`
+1. Add data models in `src/models.rs`
+2. Add scraper logic in `src/scraper/`
+3. Add new endpoints in `src/main.rs`
 
 ### Testing
-Test the application using the `uvicorn` command.
+
+Test the application by running `cargo run` and using curl:
+
+```bash
+curl http://localhost:8000/
+curl http://localhost:8000/standings
+curl http://localhost:8000/kkd-standings?top=5
+```

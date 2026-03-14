@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM rust:1.85-slim-trixie AS builder
+FROM rust:1.94.0-slim-trixie AS builder
 
 WORKDIR /app
 

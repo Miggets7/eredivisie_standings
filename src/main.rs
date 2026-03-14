@@ -129,6 +129,7 @@ async fn main() {
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "info".into()),
         )
+        .with_ansi(false)
         .init();
 
     let api_key = env::var("API_KEY").ok().filter(|k| !k.is_empty());

@@ -18,7 +18,6 @@ slim build --target $IMAGE_NAME \
     --expose=8000 \
     --include-path=/home/byrt/app \
     --preserve-path=/home/byrt/app \
-    --include-bin=/home/byrt/app/researchbuddies \
     --show-clogs
 
 # Export both images to tar files

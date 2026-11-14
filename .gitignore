@@ -17,7 +17,7 @@ Thumbs.db
 # Docker
 *.tar
 *.tar.gz
-.dockerignore
+slim.report.json
 
 # Logs
 logs/

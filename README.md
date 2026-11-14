@@ -11,7 +11,7 @@ This application provides football standings data for the Dutch Eredivisie and K
 
 ### Prerequisites
 
-- Rust 1.80 or higher
+- Latest stable Rust (the Docker build uses 1.100)
 - Docker (optional for containerized deployment)
 
 ### Environment Variables
@@ -51,9 +51,9 @@ docker run -p 8000:8000 \
 - **GET /standings**: Get current Eredivisie standings (JSON format)
 - **GET /kkd-standings**: Get Keuken Kampioen Divisie standings (JSON format)
 
-All endpoints accept optional query parameters:
-- `api_key` — API key for authentication (required if `API_KEY` env var is set)
-- `top` — Number of top teams to return (e.g., `?top=5`)
+Query parameters:
+- `api_key` — API key for authentication, on all endpoints (required if `API_KEY` env var is set)
+- `top` — Number of top teams to return, on `/standings` and `/kkd-standings` (e.g., `?top=5`)
 
 ## Development
 
@@ -65,7 +65,13 @@ All endpoints accept optional query parameters:
 
 ### Testing
 
-Test the application by running `cargo run` and using curl:
+Unit tests:
+
+```bash
+cargo test
+```
+
+Manual check: run `cargo run` and use curl:
 
 ```bash
 curl http://localhost:8000/

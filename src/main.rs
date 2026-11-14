@@ -5,136 +5,161 @@ use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::{Query, State};
+use axum::extract::{Query, Request, State};
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
+use axum::middleware::{self, Next};
+use axum::response::Response;
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::Deserialize;
+use serde_json::{Value, json};
+use subtle::ConstantTimeEq;
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use models::StandingsData;
 use scraper::eredivisie::scrape_eredivisie;
 use scraper::kkd::scrape_kkd;
 
+type Standings = Arc<RwLock<Option<StandingsData>>>;
+
 #[derive(Clone)]
 struct AppState {
-    eredivisie: Arc<RwLock<Option<StandingsData>>>,
-    kkd: Arc<RwLock<Option<StandingsData>>>,
-    api_key: Option<String>,
+    eredivisie: Standings,
+    kkd: Standings,
+    api_key: Option<Arc<str>>,
     client: reqwest::Client,
 }
 
 #[derive(Deserialize)]
-struct StandingsQuery {
+struct ApiKeyQuery {
     api_key: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct StandingsQuery {
     top: Option<usize>,
 }
 
-async fn verify_api_key(state: &AppState, query_key: &Option<String>) -> Result<(), StatusCode> {
-    match &state.api_key {
-        None => Ok(()),
-        Some(expected) => match query_key {
-            Some(key) if key == expected => Ok(()),
-            _ => Err(StatusCode::FORBIDDEN),
-        },
+/// Rejects requests without the configured API key. Open when no key is configured.
+async fn require_api_key(
+    State(state): State<AppState>,
+    Query(query): Query<ApiKeyQuery>,
+    request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    if let Some(expected) = &state.api_key {
+        let given = query.api_key.unwrap_or_default();
+        if !bool::from(given.as_bytes().ct_eq(expected.as_bytes())) {
+            return Err(StatusCode::FORBIDDEN);
+        }
     }
+    Ok(next.run(request).await)
 }
 
-async fn root(
-    State(state): State<AppState>,
-    Query(params): Query<StandingsQuery>,
-) -> Result<impl IntoResponse, StatusCode> {
-    verify_api_key(&state, &params.api_key).await?;
-
+async fn root(State(state): State<AppState>) -> Json<Value> {
     let eredivisie = state.eredivisie.read().await;
     let kkd = state.kkd.read().await;
 
-    Ok(Json(serde_json::json!({
+    Json(json!({
         "service": "Eredivisie & KKD TRMNL Service",
         "status": "running",
         "eredivisie_last_updated": eredivisie.as_ref().map(|d| &d.last_updated),
         "eredivisie_teams_count": eredivisie.as_ref().map_or(0, |d| d.teams.len()),
         "kkd_last_updated": kkd.as_ref().map(|d| &d.last_updated),
         "kkd_teams_count": kkd.as_ref().map_or(0, |d| d.teams.len()),
+    }))
+}
+
+async fn standings_json(
+    standings: &Standings,
+    top: Option<usize>,
+) -> Result<Json<Value>, StatusCode> {
+    let data = standings.read().await;
+    let data = data.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let count = top.map_or(data.teams.len(), |n| n.min(data.teams.len()));
+
+    Ok(Json(json!({
+        "standings": &data.teams[..count],
+        "last_updated": data.last_updated,
     })))
 }
 
 async fn get_standings(
     State(state): State<AppState>,
     Query(params): Query<StandingsQuery>,
-) -> Result<impl IntoResponse, StatusCode> {
-    verify_api_key(&state, &params.api_key).await?;
-
-    let data = state.eredivisie.read().await;
-    let data = data.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
-
-    let teams = match params.top {
-        Some(n) => &data.teams[..n.min(data.teams.len())],
-        None => &data.teams,
-    };
-
-    Ok(Json(serde_json::json!({
-        "standings": teams,
-        "last_updated": data.last_updated,
-    })))
+) -> Result<Json<Value>, StatusCode> {
+    standings_json(&state.eredivisie, params.top).await
 }
 
 async fn get_kkd_standings(
     State(state): State<AppState>,
     Query(params): Query<StandingsQuery>,
-) -> Result<impl IntoResponse, StatusCode> {
-    verify_api_key(&state, &params.api_key).await?;
+) -> Result<Json<Value>, StatusCode> {
+    standings_json(&state.kkd, params.top).await
+}
 
-    let data = state.kkd.read().await;
-    let data = data.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
-
-    let teams = match params.top {
-        Some(n) => &data.teams[..n.min(data.teams.len())],
-        None => &data.teams,
-    };
-
-    Ok(Json(serde_json::json!({
-        "standings": teams,
-        "last_updated": data.last_updated,
-    })))
+async fn update_league(league: &str, standings: &Standings, scraped: Option<StandingsData>) {
+    match scraped {
+        Some(data) => {
+            *standings.write().await = Some(data);
+            info!("{league} standings updated");
+        }
+        None => error!("Failed to update {league} standings, keeping previous data"),
+    }
 }
 
 async fn update_standings(state: &AppState) {
-    info!("Updating Eredivisie standings...");
-    match scrape_eredivisie(&state.client).await {
-        Some(data) => {
-            *state.eredivisie.write().await = Some(data);
-            info!("Eredivisie standings updated successfully");
-        }
-        None => error!("Failed to update Eredivisie standings"),
-    }
+    // Each league is stored as soon as its own scrape finishes, so a slow site
+    // does not delay the other league.
+    tokio::join!(
+        async {
+            let data = scrape_eredivisie(&state.client).await;
+            update_league("Eredivisie", &state.eredivisie, data).await;
+        },
+        async {
+            let data = scrape_kkd(&state.client).await;
+            update_league("KKD", &state.kkd, data).await;
+        },
+    );
+}
 
-    info!("Updating Keuken Kampioen Divisie standings...");
-    match scrape_kkd(&state.client).await {
-        Some(data) => {
-            *state.kkd.write().await = Some(data);
-            info!("KKD standings updated successfully");
-        }
-        None => error!("Failed to update KKD standings"),
+/// Resolves on Ctrl-C or SIGTERM, so `docker stop` shuts down without waiting for SIGKILL.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to install Ctrl-C handler");
+    };
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("Failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+    tokio::select! {
+        () = ctrl_c => {},
+        () = terminate => {},
     }
+    info!("Shutting down");
 }
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .with_ansi(false)
         .init();
 
-    let api_key = env::var("API_KEY").ok().filter(|k| !k.is_empty());
+    let api_key = env::var("API_KEY")
+        .ok()
+        .filter(|k| !k.is_empty())
+        .map(Arc::from);
     if api_key.is_none() {
-        tracing::warn!(
+        warn!(
             "API_KEY environment variable not set. API will be accessible without authentication."
         );
     }
@@ -146,21 +171,17 @@ async fn main() {
         .expect("Failed to create HTTP client");
 
     let state = AppState {
-        eredivisie: Arc::new(RwLock::new(None)),
-        kkd: Arc::new(RwLock::new(None)),
+        eredivisie: Standings::default(),
+        kkd: Standings::default(),
         api_key,
         client,
     };
 
-    // Initial fetch
-    info!("Starting Eredivisie TRMNL Service...");
-    update_standings(&state).await;
-
-    // Background scheduler: update every 60 minutes
+    // Refresh every 60 minutes. The first tick fires immediately, so the initial
+    // fetch runs while the server is already accepting requests (503 until loaded).
     let scheduler_state = state.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(3600));
-        interval.tick().await; // skip the immediate first tick (already fetched above)
         loop {
             interval.tick().await;
             update_standings(&scheduler_state).await;
@@ -171,6 +192,10 @@ async fn main() {
         .route("/", get(root))
         .route("/standings", get(get_standings))
         .route("/kkd-standings", get(get_kkd_standings))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_api_key,
+        ))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -178,6 +203,9 @@ async fn main() {
         .await
         .expect("Failed to bind to port 8000");
 
-    info!("Service started successfully on port 8000");
-    axum::serve(listener, app).await.unwrap();
+    info!("Service started on port 8000");
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .expect("Server error");
 }

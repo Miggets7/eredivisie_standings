@@ -1,44 +1,62 @@
-# Stage 1: Build
-FROM rust:1.94.0-slim-trixie AS builder
+# Chef image - prepare recipe for dependency caching
+FROM rust:1.100.0-slim-trixie AS chef
 
-WORKDIR /app
+RUN cargo install cargo-chef --locked
+WORKDIR /build
 
-# Copy manifests
+# Plan stage - generate recipe from source
+FROM chef AS planner
+
 COPY Cargo.toml Cargo.lock ./
-
-# Create a dummy main.rs to cache dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release && rm -rf src
-
-# Copy actual source code
 COPY src/ src/
+RUN cargo chef prepare --recipe-path recipe.json
 
-# Touch main.rs to force rebuild of our code (not deps)
-RUN touch src/main.rs && cargo build --release
+# Builder image - Rust compilation
+FROM chef AS builder-image
 
-# Stage 2: Runtime
-FROM debian:trixie-slim
+# Set noninteractive to avoid stuck builds
+ARG DEBIAN_FRONTEND=noninteractive
 
-# Install CA certificates for HTTPS requests
+# Disable incremental compilation (useless in Docker, wastes disk)
+ENV CARGO_INCREMENTAL=0
+
+# Install mold linker
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    mold \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configure mold as the linker
+RUN mkdir -p /build/.cargo && \
+    printf '[target.x86_64-unknown-linux-gnu]\nrustflags = ["-C", "link-arg=-fuse-ld=mold"]\n' > /build/.cargo/config.toml
+
+# Cook dependencies from recipe (cached layer)
+COPY --from=planner /build/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+
+# Copy actual source code and build
+COPY Cargo.toml Cargo.lock ./
+COPY src/ src/
+RUN cargo build --release
+
+# Runner image
+FROM debian:trixie-slim AS runner-image
+
+# CA certificates for HTTPS requests to the scraped websites
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Create a non-root user
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+# Create non-root user
+RUN useradd --create-home byrt
 
-WORKDIR /app
+# Copy binary
+COPY --from=builder-image /build/target/release/eredivisie-standing /home/byrt/app/eredivisie-standing
 
-# Copy binary from builder
-COPY --from=builder /app/target/release/eredivisie-standing ./
+# Set user and working directory
+USER byrt
+WORKDIR /home/byrt/app
 
-# Set environment variables
-ENV API_KEY=""
-
-# Switch to non-root user
-USER appuser
-
-# Expose the port the app runs on
+# Expose port
 EXPOSE 8000
 
 CMD ["./eredivisie-standing"]

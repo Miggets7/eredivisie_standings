@@ -2,7 +2,8 @@ use scraper::Html;
 
 use crate::models::{StandingsData, Team};
 use crate::scraper::{
-    cell_text, clean_team_name, fetch_html, find_rows, finish, row_cells, safe_int, split_ints,
+    cell_img_attr, cell_text, clean_team_name, fetch_html, find_rows, finish, row_cells, safe_int,
+    split_ints,
 };
 
 const URL: &str = "https://eredivisie.nl/competitie/stand/";
@@ -52,6 +53,7 @@ fn parse(html: &str) -> Vec<Team> {
             goals_against,
             goal_difference: safe_int(&cell_text(&cells, 5)),
             points: safe_int(&cell_text(&cells, 6)),
+            logo: cell_img_attr(&cells, 1, "src").map(str::to_owned),
         });
     }
     teams
@@ -78,6 +80,13 @@ mod tests {
         );
         assert_eq!(t.points, 25);
         assert_eq!(teams[17].goal_difference, -29);
+        assert_eq!(
+            teams[0].logo.as_deref(),
+            Some(
+                "https://eredivisie.b-cdn.net/production/clubs/psv/PSV_Logo.png?width=40&height=40&quality=85"
+            )
+        );
+        assert!(teams.iter().all(|t| t.logo.is_some()));
         // Catches a swapped W/D/L column: every row must add up.
         for t in &teams {
             assert_eq!(t.wins * 3 + t.draws, t.points, "{}", t.name);

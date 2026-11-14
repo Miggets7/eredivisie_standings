@@ -48,7 +48,8 @@ docker run -p 8000:8000 -e API_KEY="your_api_key" eredivisie-standing
   - KKD: primary source is `props.pageProps.rankingsData` in the `<script id="__NEXT_DATA__">` JSON; HTML table parsing is the fallback.
 - **App state** (`src/main.rs`) — `Arc<RwLock<Option<StandingsData>>>` shared between Axum handlers and background updater
 - **Background scheduler** — `tokio::spawn` with `tokio::time::interval` refreshes standings every 60 minutes (both leagues scraped concurrently); first tick runs immediately, so endpoints return 503 until the first scrape finishes
-- **API endpoints** — `GET /` (health), `GET /standings`, `GET /kkd-standings`
+- **API endpoints** — `GET /` (health), `GET /standings` (`?league=kkd` switches league; missing or empty means Eredivisie so TRMNL installs without the league field keep working), `GET /kkd-standings`
+- **Response extras** — each team carries `logo` (crest URL from the source site); the payload carries `season`, computed in `scraper::season()` (turns over on 1 July)
 - **Auth** — `require_api_key` middleware applied with `route_layer` to every route; constant-time compare via `subtle`
 - **Shutdown** — graceful on Ctrl-C / SIGTERM
 

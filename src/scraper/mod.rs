@@ -3,7 +3,7 @@ pub mod kkd;
 
 use std::sync::LazyLock;
 
-use chrono::Utc;
+use chrono::{Datelike, NaiveDate, Utc};
 use scraper::{ElementRef, Html, Selector};
 use tracing::{error, info};
 
@@ -16,6 +16,7 @@ const MIN_TEAMS: usize = 10;
 
 static CELL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("td, th").unwrap());
 static ROW: LazyLock<Selector> = LazyLock::new(|| Selector::parse("tr").unwrap());
+static IMG: LazyLock<Selector> = LazyLock::new(|| Selector::parse("img").unwrap());
 
 pub fn safe_int(value: &str) -> i32 {
     let cleaned: String = value
@@ -66,6 +67,22 @@ pub fn cell_text(cells: &[ElementRef], i: usize) -> String {
     cells.get(i).map(|c| c.text().collect()).unwrap_or_default()
 }
 
+/// Attribute `attr` of the first image in cell `i`, e.g. a club crest's `src` or `alt`.
+pub fn cell_img_attr<'a>(cells: &[ElementRef<'a>], i: usize, attr: &str) -> Option<&'a str> {
+    cells.get(i)?.select(&IMG).next()?.attr(attr)
+}
+
+/// Dutch football seasons start in summer: from July on, `date` belongs to the season
+/// that ends next year.
+pub fn season(date: NaiveDate) -> String {
+    let start = if date.month() >= 7 {
+        date.year()
+    } else {
+        date.year() - 1
+    };
+    format!("{start}/{}", start + 1)
+}
+
 /// Finds the standings rows. Tries each selector in order and takes the first that
 /// yields at least `expected` rows. Falls back to any row whose cell at `pos_cell`
 /// holds a position between 1 and `expected`.
@@ -108,9 +125,11 @@ pub fn finish(league: &str, mut teams: Vec<Team>, expected: usize) -> Option<Sta
     }
     teams.sort_by_key(|t| t.position);
     info!("{league}: scraped {} teams", teams.len());
+    let now = Utc::now();
     Some(StandingsData {
         teams,
-        last_updated: Utc::now().to_rfc3339(),
+        last_updated: now.to_rfc3339(),
+        season: season(now.date_naive()),
     })
 }
 
@@ -131,5 +150,13 @@ mod tests {
         assert_eq!(clean_team_name("  Ajax \n  Amsterdam* "), "Ajax Amsterdam");
         assert_eq!(clean_team_name("Go * Ahead"), "Go Ahead");
         assert_eq!(clean_team_name("Heracles Almelo +"), "Heracles Almelo");
+    }
+
+    #[test]
+    fn season_turns_over_in_july() {
+        let date = |m, d| NaiveDate::from_ymd_opt(2026, m, d).unwrap();
+        assert_eq!(season(date(6, 30)), "2025/2026");
+        assert_eq!(season(date(7, 1)), "2026/2027");
+        assert_eq!(season(date(11, 14)), "2026/2027");
     }
 }

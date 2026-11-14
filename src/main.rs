@@ -40,6 +40,9 @@ struct ApiKeyQuery {
 #[derive(Deserialize)]
 struct StandingsQuery {
     top: Option<usize>,
+    /// `kkd` or `eredivisie`. Missing or empty means Eredivisie, so a TRMNL recipe
+    /// install without the league field set keeps working.
+    league: Option<String>,
 }
 
 /// Rejects requests without the configured API key. Open when no key is configured.
@@ -83,14 +86,25 @@ async fn standings_json(
     Ok(Json(json!({
         "standings": &data.teams[..count],
         "last_updated": data.last_updated,
+        "season": data.season,
     })))
+}
+
+fn league_standings<'a>(state: &'a AppState, league: Option<&str>) -> Option<&'a Standings> {
+    match league {
+        None | Some("" | "eredivisie") => Some(&state.eredivisie),
+        Some("kkd") => Some(&state.kkd),
+        Some(_) => None,
+    }
 }
 
 async fn get_standings(
     State(state): State<AppState>,
     Query(params): Query<StandingsQuery>,
 ) -> Result<Json<Value>, StatusCode> {
-    standings_json(&state.eredivisie, params.top).await
+    let standings =
+        league_standings(&state, params.league.as_deref()).ok_or(StatusCode::BAD_REQUEST)?;
+    standings_json(standings, params.top).await
 }
 
 async fn get_kkd_standings(
@@ -208,4 +222,28 @@ async fn main() {
         .with_graceful_shutdown(shutdown_signal())
         .await
         .expect("Server error");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn league_param_picks_standings() {
+        let state = AppState {
+            eredivisie: Standings::default(),
+            kkd: Standings::default(),
+            api_key: None,
+            client: reqwest::Client::new(),
+        };
+        for league in [None, Some(""), Some("eredivisie")] {
+            let picked = league_standings(&state, league).unwrap();
+            assert!(Arc::ptr_eq(picked, &state.eredivisie), "{league:?}");
+        }
+        assert!(Arc::ptr_eq(
+            league_standings(&state, Some("kkd")).unwrap(),
+            &state.kkd
+        ));
+        assert!(league_standings(&state, Some("epl")).is_none());
+    }
 }

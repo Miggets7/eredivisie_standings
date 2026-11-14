@@ -59,11 +59,11 @@
   classes), crest (crest size classes), fav_pos, zone_direct, zone_playoff.
 {%- endcomment -%}
 {% template standings_table %}
-<table class="table table--indexed {{ size }}" data-table-limit="true">
+<table class="table {{ size }}" data-table-limit="true">
   <thead>
     <tr>
       <th><span class="title title--small"></span></th>
-      <th class="w--full"><span class="title title--small">Club</span></th>
+      <th class="w--full pl--2"><span class="title title--small">Club</span></th>
       {%- if wdl %}
       <th class="text--right pl--4"><span class="title title--small">W</span></th>
       <th class="text--right pl--4"><span class="title title--small">D</span></th>
@@ -84,8 +84,8 @@
     {%- if zone_direct contains pos_key -%}{%- assign zone = "bg--gray-65" -%}
     {%- elsif zone_playoff contains pos_key -%}{%- assign zone = "bg--gray-75" -%}{%- endif %}
     <tr>
-      <td class="{{ zone }}"><span class="meta"><span class="index">{{ t.position }}</span></span></td>
-      <td class="{{ zone }}">
+      <td class="{{ zone }}"><span class="label text--bold">{{ t.position }}</span></td>
+      <td class="pl--2 {{ zone }}">
         <div class="flex flex--row flex--left flex--center-y gap--small">
           {%- if t.logo %}<img class="image image-dither {{ crest }} no-shrink" src="{{ t.logo }}" alt="">{% endif %}
           <span class="label{{ hl }}" data-clamp="1">{{ t.name }}</span>

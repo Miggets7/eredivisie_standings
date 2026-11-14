@@ -1,0 +1,9 @@
+<div class="layout layout--col layout--top">
+  {%- if standings.size > 0 %}
+  <div class="w--full">{% render "standings_table", standings: standings, count: standings.size, start: 0, wdl: true, gd: false, size: "table--xsmall lg:table--small", crest: "w--4 h--4", fav_pos: fav_pos, zone_direct: zone_direct, zone_playoff: zone_playoff %}</div>
+  {%- else %}
+  {% render "empty_state" %}
+  {%- endif %}
+</div>
+
+{% render "league_title_bar", logo_class: logo_class, league_logo: league_logo, league_name: league_name, subtitle: subtitle %}

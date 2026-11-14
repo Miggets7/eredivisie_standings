@@ -58,7 +58,8 @@ Query parameters:
 
 Response: `standings` (one entry per team with position, name, games, wins, draws, losses, goals,
 goal difference, points and `logo`, the club crest URL from the source site), `last_updated` and
-`season` (e.g. `2026/2027`, turning over on 1 July).
+`season` (e.g. `2026/2027`, turning over on 1 July). The season follows the date, not the data: until
+the leagues publish the new table, the previous season's final standings carry the new label.
 
 ## Development
 

@@ -153,6 +153,7 @@ mod tests {
             (44, 15, 29)
         );
         assert_eq!(t.points, 35);
+        assert!(teams.iter().all(|t| t.logo.is_some()));
         assert_eq!(
             t.logo.as_deref(),
             Some(

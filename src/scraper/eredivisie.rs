@@ -2,7 +2,8 @@ use scraper::Html;
 
 use crate::models::{StandingsData, Team};
 use crate::scraper::{
-    cell_text, clean_team_name, fetch_html, find_rows, finish, row_cells, safe_int, split_ints,
+    cell_img_attr, cell_text, clean_team_name, fetch_html, find_rows, finish, row_cells, safe_int,
+    split_ints,
 };
 
 const URL: &str = "https://eredivisie.nl/competitie/stand/";
@@ -10,6 +11,33 @@ const EXPECTED_TEAMS: usize = 18;
 
 /// The site splits the standings over two `table.table` elements (1-9 and 10-18).
 const TABLE_SELECTORS: [&str; 2] = ["table.table tbody tr", "table tbody tr"];
+
+/// Crest size requested from the site's image CDN. The page asks for 40px thumbnails, which turn
+/// soft when a display shows the crest larger, such as the leader card in the TRMNL recipe.
+const CREST_PX: &str = "96";
+
+/// The crest URL with its `width` and `height` query parameters set to `CREST_PX`.
+/// URLs without a query, or that do not parse, are returned unchanged.
+fn crest_url(src: &str) -> String {
+    let Ok(mut url) = reqwest::Url::parse(src) else {
+        return src.to_owned();
+    };
+    if url.query().is_none() {
+        return src.to_owned();
+    }
+    let pairs: Vec<(String, String)> = url
+        .query_pairs()
+        .map(|(key, value)| {
+            let value = match key.as_ref() {
+                "width" | "height" => CREST_PX.into(),
+                _ => value.into_owned(),
+            };
+            (key.into_owned(), value)
+        })
+        .collect();
+    url.query_pairs_mut().clear().extend_pairs(pairs);
+    url.into()
+}
 
 pub async fn scrape_eredivisie(client: &reqwest::Client) -> Option<StandingsData> {
     let html = fetch_html(client, URL).await?;
@@ -52,6 +80,7 @@ fn parse(html: &str) -> Vec<Team> {
             goals_against,
             goal_difference: safe_int(&cell_text(&cells, 5)),
             points: safe_int(&cell_text(&cells, 6)),
+            logo: cell_img_attr(&cells, 1, "src").map(crest_url),
         });
     }
     teams
@@ -63,6 +92,16 @@ mod tests {
 
     /// Both standings tables trimmed from the live page.
     const PAGE: &str = include_str!("../../tests/fixtures/eredivisie.html");
+
+    #[test]
+    fn crest_url_leaves_urls_without_size_query_alone() {
+        let plain = "https://eredivisie.b-cdn.net/production/clubs/psv/PSV_Logo.png";
+        assert_eq!(crest_url(plain), plain);
+        assert_eq!(
+            crest_url("/clubs/psv.png?width=40"),
+            "/clubs/psv.png?width=40"
+        );
+    }
 
     #[test]
     fn parses_real_page() {
@@ -78,6 +117,13 @@ mod tests {
         );
         assert_eq!(t.points, 25);
         assert_eq!(teams[17].goal_difference, -29);
+        assert_eq!(
+            teams[0].logo.as_deref(),
+            Some(
+                "https://eredivisie.b-cdn.net/production/clubs/psv/PSV_Logo.png?width=96&height=96&quality=85"
+            )
+        );
+        assert!(teams.iter().all(|t| t.logo.is_some()));
         // Catches a swapped W/D/L column: every row must add up.
         for t in &teams {
             assert_eq!(t.wins * 3 + t.draws, t.points, "{}", t.name);

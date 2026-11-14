@@ -7,7 +7,8 @@ use tracing::warn;
 
 use crate::models::{StandingsData, Team};
 use crate::scraper::{
-    cell_text, clean_team_name, fetch_html, find_rows, finish, row_cells, safe_int, split_ints,
+    cell_img_attr, cell_text, clean_team_name, fetch_html, find_rows, finish, row_cells, safe_int,
+    split_ints,
 };
 
 const URL: &str = "https://keukenkampioendivisie.nl/klassement";
@@ -17,7 +18,6 @@ const TABLE_SELECTORS: [&str; 2] = ["table.table-medium tbody tr", "table tbody 
 
 static NEXT_DATA: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("script#__NEXT_DATA__").unwrap());
-static IMG: LazyLock<Selector> = LazyLock::new(|| Selector::parse("img").unwrap());
 
 /// A cleaned name, if it is long enough to be a real team name.
 fn valid_name(raw: &str) -> Option<String> {
@@ -27,10 +27,7 @@ fn valid_name(raw: &str) -> Option<String> {
 
 /// Club name from cell 3, or the logo's alt text in cell 2.
 fn extract_team_name(cells: &[ElementRef]) -> Option<String> {
-    valid_name(&cell_text(cells, 3)).or_else(|| {
-        let alt = cells[2].select(&IMG).next()?.attr("alt")?;
-        valid_name(alt)
-    })
+    valid_name(&cell_text(cells, 3)).or_else(|| valid_name(cell_img_attr(cells, 2, "alt")?))
 }
 
 pub async fn scrape_kkd(client: &reqwest::Client) -> Option<StandingsData> {
@@ -59,6 +56,7 @@ struct Ranking {
     goals_for: i32,
     goals_against: i32,
     points: i32,
+    contestant_logo: Option<String>,
 }
 
 impl From<Ranking> for Team {
@@ -74,6 +72,7 @@ impl From<Ranking> for Team {
             goals_against: r.goals_against,
             goal_difference: r.goals_for - r.goals_against,
             points: r.points,
+            logo: r.contestant_logo,
         }
     }
 }
@@ -127,6 +126,7 @@ fn teams_from_table(document: &Html) -> Vec<Team> {
             goals_against,
             goal_difference: safe_int(&cell_text(&cells, 8)),
             points: safe_int(&cell_text(&cells, 6)),
+            logo: cell_img_attr(&cells, 2, "src").map(str::to_owned),
         });
     }
     teams
@@ -153,6 +153,13 @@ mod tests {
             (44, 15, 29)
         );
         assert_eq!(t.points, 35);
+        assert!(teams.iter().all(|t| t.logo.is_some()));
+        assert_eq!(
+            t.logo.as_deref(),
+            Some(
+                "https://api.keukenkampioendivisie.nl/wp-content/uploads/2023/12/heracles-almelo-320x320.png"
+            )
+        );
     }
 
     #[test]

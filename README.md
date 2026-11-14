@@ -48,12 +48,18 @@ docker run -p 8000:8000 \
 ### API Endpoints
 
 - **GET /**: Health check endpoint
-- **GET /standings**: Get current Eredivisie standings (JSON format)
-- **GET /kkd-standings**: Get Keuken Kampioen Divisie standings (JSON format)
+- **GET /standings**: Get current standings (JSON format), Eredivisie by default
+- **GET /kkd-standings**: Get Keuken Kampioen Divisie standings (JSON format), same as `/standings?league=kkd`
 
 Query parameters:
 - `api_key` — API key for authentication, on all endpoints (required if `API_KEY` env var is set)
 - `top` — Number of top teams to return, on `/standings` and `/kkd-standings` (e.g., `?top=5`)
+- `league` — `eredivisie` or `kkd`, on `/standings`. Missing or empty means Eredivisie; any other value returns 400
+
+Response: `standings` (one entry per team with position, name, games, wins, draws, losses, goals,
+goal difference, points and `logo`, the club crest URL from the source site), `last_updated` and
+`season` (e.g. `2026/2027`, turning over on 1 July). The season follows the date, not the data: until
+the leagues publish the new table, the previous season's final standings carry the new label.
 
 ## Development
 

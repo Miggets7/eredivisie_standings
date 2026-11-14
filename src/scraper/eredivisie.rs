@@ -1,135 +1,87 @@
-use chrono::Utc;
-use scraper::{Html, Selector};
-use tracing::{error, info};
+use scraper::Html;
 
 use crate::models::{StandingsData, Team};
-use crate::scraper::{clean_team_name, fetch_html, safe_int};
+use crate::scraper::{
+    cell_text, clean_team_name, fetch_html, find_rows, finish, row_cells, safe_int, split_ints,
+};
 
 const URL: &str = "https://eredivisie.nl/competitie/stand/";
 const EXPECTED_TEAMS: usize = 18;
 
+/// The site splits the standings over two `table.table` elements (1-9 and 10-18).
+const TABLE_SELECTORS: [&str; 2] = ["table.table tbody tr", "table tbody tr"];
+
 pub async fn scrape_eredivisie(client: &reqwest::Client) -> Option<StandingsData> {
-    let html = match fetch_html(client, URL).await {
-        Ok(html) => html,
-        Err(e) => {
-            error!("Error fetching {URL}: {e}");
-            return None;
-        }
-    };
+    let html = fetch_html(client, URL).await?;
+    finish("Eredivisie", parse(&html), EXPECTED_TEAMS)
+}
 
-    let document = Html::parse_document(&html);
+/// Columns: # | Club | GS | W | G | V | DV-DT | DS | P
+fn parse(html: &str) -> Vec<Team> {
+    let document = Html::parse_document(html);
+    let rows = find_rows(&document, &TABLE_SELECTORS, 0, EXPECTED_TEAMS);
 
-    // Try multiple table selectors
-    let table_selectors = [
-        "table.standings tbody tr",
-        ".standings-table tbody tr",
-        "table tbody tr",
-        ".table tbody tr",
-    ];
-
-    let mut rows: Vec<_> = Vec::new();
-    for selector_str in &table_selectors {
-        if let Ok(selector) = Selector::parse(selector_str) {
-            let found: Vec<_> = document.select(&selector).collect();
-            if found.len() >= EXPECTED_TEAMS {
-                rows = found;
-                break;
-            }
-        }
-    }
-
-    // Fallback: look for any table rows with numeric data
-    if rows.is_empty() {
-        if let Ok(tr_selector) = Selector::parse("tr") {
-            let td_selector = Selector::parse("td, th").unwrap();
-            rows = document
-                .select(&tr_selector)
-                .filter(|row| {
-                    let cells: Vec<_> = row.select(&td_selector).collect();
-                    if cells.len() < 7 {
-                        return false;
-                    }
-                    let first_text = cells[0].text().collect::<String>().trim().to_string();
-                    first_text
-                        .parse::<u32>()
-                        .is_ok_and(|n| n >= 1 && n <= EXPECTED_TEAMS as u32)
-                })
-                .collect();
-        }
-    }
-
-    info!("Found {} table rows", rows.len());
-
-    let td_selector = Selector::parse("td, th").unwrap();
     let mut teams = Vec::new();
-
     for (i, row) in rows.iter().take(EXPECTED_TEAMS).enumerate() {
-        let cells: Vec<_> = row.select(&td_selector).collect();
-        if cells.len() < 7 {
+        let Some(cells) = row_cells(row) else {
+            continue;
+        };
+
+        let position = cell_text(&cells, 0)
+            .trim()
+            .parse::<i32>()
+            .unwrap_or((i + 1) as i32);
+
+        let name = clean_team_name(&cell_text(&cells, 1));
+        if name.len() < 2 {
             continue;
         }
 
-        let pos_text = cells[0].text().collect::<String>().trim().to_string();
-        let position = pos_text.parse::<i32>().unwrap_or((i + 1) as i32);
-
-        let team_name = clean_team_name(&cells[1].text().collect::<String>());
-        if team_name.len() < 2 {
-            continue;
-        }
-
-        let games = safe_int(&cells[2].text().collect::<String>());
-
-        // W|L|D from cell 3
-        let results_text = cells[3].text().collect::<String>();
-        let results_parts: Vec<&str> = results_text.split('|').collect();
-        let wins = results_parts.first().map_or(0, |v| safe_int(v));
-        let losses = results_parts.get(1).map_or(0, |v| safe_int(v));
-        let draws = results_parts.get(2).map_or(0, |v| safe_int(v));
-
-        // Goals for-against from cell 4
-        let goals_text = cells[4].text().collect::<String>();
-        let goals_parts: Vec<&str> = goals_text.split('-').collect();
-        let goals_for = goals_parts.first().map_or(0, |v| safe_int(v));
-        let goals_against = goals_parts.get(1).map_or(0, |v| safe_int(v));
-
-        let goal_difference = if cells.len() > 5 {
-            safe_int(&cells[5].text().collect::<String>())
-        } else {
-            0
-        };
-        let points = if cells.len() > 6 {
-            safe_int(&cells[6].text().collect::<String>())
-        } else {
-            0
-        };
+        // "W | G | V" in cell 3: won, drawn (gelijk), lost (verloren)
+        let [wins, draws, losses] = split_ints(&cell_text(&cells, 3), '|');
+        let [goals_for, goals_against] = split_ints(&cell_text(&cells, 4), '-');
 
         teams.push(Team {
             position,
-            name: team_name,
-            games,
+            name,
+            games: safe_int(&cell_text(&cells, 2)),
             wins,
-            losses,
             draws,
+            losses,
             goals_for,
             goals_against,
-            goal_difference,
-            points,
+            goal_difference: safe_int(&cell_text(&cells, 5)),
+            points: safe_int(&cell_text(&cells, 6)),
         });
     }
+    teams
+}
 
-    if teams.len() >= 10 {
-        teams.sort_by_key(|t| t.position);
-        info!("Successfully scraped {} teams", teams.len());
-        Some(StandingsData {
-            teams,
-            last_updated: Utc::now().to_rfc3339(),
-        })
-    } else {
-        error!(
-            "Only found {} teams, expected {}",
-            teams.len(),
-            EXPECTED_TEAMS
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Both standings tables trimmed from the live page.
+    const PAGE: &str = include_str!("../../tests/fixtures/eredivisie.html");
+
+    #[test]
+    fn parses_real_page() {
+        let teams = parse(PAGE);
+
+        assert_eq!(teams.len(), EXPECTED_TEAMS);
+        let t = &teams[1];
+        assert_eq!((t.position, t.name.as_str()), (2, "Feyenoord"));
+        assert_eq!((t.games, t.wins, t.draws, t.losses), (12, 7, 4, 1));
+        assert_eq!(
+            (t.goals_for, t.goals_against, t.goal_difference),
+            (36, 17, 19)
         );
-        None
+        assert_eq!(t.points, 25);
+        assert_eq!(teams[17].goal_difference, -29);
+        // Catches a swapped W/D/L column: every row must add up.
+        for t in &teams {
+            assert_eq!(t.wins * 3 + t.draws, t.points, "{}", t.name);
+            assert_eq!(t.wins + t.draws + t.losses, t.games, "{}", t.name);
+        }
     }
 }

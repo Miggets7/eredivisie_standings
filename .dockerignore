@@ -1,0 +1,5 @@
+# Allowlist: only what the Dockerfile copies is sent to the build context
+*
+!Cargo.toml
+!Cargo.lock
+!src/

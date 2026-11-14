@@ -4,8 +4,8 @@
 {%- assign fav = cfv.favorite_team | default: "" | downcase | strip -%}
 {%- comment -%}
   Shaded zones as comma-wrapped position lists, taken from the legends on eredivisie.nl and
-  keukenkampioendivisie.nl (season 2026/2027; the European places follow the UEFA ranking, so check them
-  each season). zone_direct gets the darker shade, zone_playoff the lighter one.
+  keukenkampioendivisie.nl, last checked for season 2026/2027. The European places follow the UEFA ranking,
+  so check them each season. zone_direct gets the darker shade, zone_playoff the lighter one.
 {%- endcomment -%}
 {%- if league == "kkd" -%}
   {%- assign league_name = "Keuken Kampioen Divisie" -%}

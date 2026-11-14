@@ -34,7 +34,7 @@ custom_fields:
 - keyname: favorite_team
   field_type: string
   name: Favourite club
-  description: Highlights this club. Part of the name is enough, for example Feyenoord or Twente.
+  description: Highlights this club. Type the name as shown in the table, for example Feyenoord or FC Twente.
   placeholder: Feyenoord
   optional: true
 name: Eredivisie & Keuken Kampioen Divisie

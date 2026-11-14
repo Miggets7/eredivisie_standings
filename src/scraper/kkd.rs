@@ -65,7 +65,7 @@ impl From<Ranking> for Team {
     fn from(r: Ranking) -> Self {
         Team {
             position: r.rank,
-            name: r.contestant_club_name,
+            name: clean_team_name(&r.contestant_club_name),
             games: r.matches_played,
             wins: r.matches_won,
             draws: r.matches_drawn,

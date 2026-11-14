@@ -1,0 +1,13 @@
+<div class="layout layout--col layout--center-y gap--medium">
+  {%- if standings.size > 0 %}
+  <div class="grid grid--cols-2 gap--xlarge w--full">
+    <div>{% render "standings_table", standings: standings, count: half, start: 0, wdl: true, gd: true, size: "table--small lg:table--base", crest: "w--5 h--5", fav_pos: fav_pos, zone_direct: zone_direct, zone_playoff: zone_playoff %}</div>
+    <div>{% render "standings_table", standings: standings, count: half, start: half, wdl: true, gd: true, size: "table--small lg:table--base", crest: "w--5 h--5", fav_pos: fav_pos, zone_direct: zone_direct, zone_playoff: zone_playoff %}</div>
+  </div>
+  {% render "zone_legend", league: league %}
+  {%- else %}
+  {% render "empty_state" %}
+  {%- endif %}
+</div>
+
+{% render "league_title_bar", logo_class: logo_class, league_logo: league_logo, league_name: league_name, subtitle: subtitle %}

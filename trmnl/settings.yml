@@ -1,0 +1,42 @@
+---
+strategy: polling
+no_screen_padding: 'no'
+dark_mode: 'no'
+static_data: ''
+polling_verb: get
+framework_version: 3.4.0
+serverless_language: ''
+refresh_interval_floor: '60'
+polling_url: https://eredivisiestandings.byrt.nl/standings?league={{ league }}&api_key=[set]
+polling_headers:
+polling_body:
+id: 124580
+oauth_enabled: 'false'
+oauth_pkce_enabled: 'no'
+custom_fields:
+- keyname: doesnt_matter
+  name: About This Plugin
+  field_type: author_bio
+  category: sports
+  description: Current Eredivisie or Keuken Kampioen Divisie (KKD) standings with club crests, season, matchday and shaded Champions League, promotion and relegation zones. Optionally highlights your favourite club.
+  github_url: https://github.com/Miggets7/eredivisie_standings
+  learn_more_url: https://github.com/Miggets7/eredivisie_standings
+  email_address: michael@byrt.nl
+- keyname: league
+  field_type: select
+  name: League
+  description: Which competition to show.
+  indexable: true
+  options:
+  - Eredivisie: eredivisie
+  - Keuken Kampioen Divisie: kkd
+  default: eredivisie
+- keyname: favorite_team
+  field_type: string
+  name: Favourite club
+  description: Highlights this club. Type the name as shown in the table, for example Feyenoord or FC Twente.
+  placeholder: Feyenoord
+  optional: true
+name: Eredivisie & Keuken Kampioen Divisie
+description: Eredivisie & KKD table with crests
+refresh_interval: 240

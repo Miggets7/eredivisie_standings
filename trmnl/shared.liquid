@@ -1,0 +1,136 @@
+{%- comment -%} League settings, matchday and favourite club, shared by every size. {%- endcomment -%}
+{%- assign cfv = trmnl.plugin_settings.custom_fields_values -%}
+{%- assign league = cfv.league | default: "eredivisie" -%}
+{%- assign fav = cfv.favorite_team | default: "" | downcase | strip -%}
+{%- comment -%}
+  Shaded zones as comma-wrapped position lists, taken from the legends on eredivisie.nl and
+  keukenkampioendivisie.nl, last checked for season 2026/2027. The European places follow the UEFA ranking,
+  so check them each season. zone_direct gets the darker shade, zone_playoff the lighter one.
+{%- endcomment -%}
+{%- if league == "kkd" -%}
+  {%- assign league_name = "Keuken Kampioen Divisie" -%}
+  {%- assign league_logo = "https://api.keukenkampioendivisie.nl/wp-content/themes/kkd-headless/logo.png" -%}
+  {%- assign logo_class = "image" -%}
+  {%- comment -%} 1-2 promote directly; play-off places depend on period titles, so stay unshaded. {%- endcomment -%}
+  {%- assign zone_direct = ",1,2," -%}
+  {%- assign zone_playoff = "" -%}
+{%- else -%}
+  {%- assign league_name = "Eredivisie" -%}
+  {%- assign league_logo = "https://files.byrt.nl/public/eredivisie_logo.png" -%}
+  {%- assign logo_class = "image image--adaptive" -%}
+  {%- comment -%}
+    1: Champions League league phase, 2: Champions League qualifying,
+    16: relegation play-offs, 17-18: direct relegation.
+  {%- endcomment -%}
+  {%- assign zone_direct = ",1,17,18," -%}
+  {%- assign zone_playoff = ",2,16," -%}
+{%- endif -%}
+
+{%- assign matchday = 0 -%}
+{%- assign fav_pos = 0 -%}
+{%- for t in standings -%}
+  {%- if t.games > matchday -%}{%- assign matchday = t.games -%}{%- endif -%}
+  {%- if fav != "" and fav_pos == 0 -%}
+    {%- assign club = t.name | downcase -%}
+    {%- if club contains fav -%}{%- assign fav_pos = t.position -%}{%- endif -%}
+  {%- endif -%}
+{%- endfor -%}
+
+{%- comment -%}
+  Short tables (half horizontal, quadrant) show window_rows rows. With a favourite club they centre on it;
+  without one, half horizontal starts below the leader card (win_start) and quadrant at the top (top_start).
+{%- endcomment -%}
+{%- assign window_rows = 7 -%}
+{%- assign win_start = 1 -%}
+{%- if fav_pos > 0 -%}
+  {%- assign win_start = fav_pos | minus: 4 -%}
+  {%- assign max_start = standings.size | minus: window_rows -%}
+  {%- if win_start > max_start -%}{%- assign win_start = max_start -%}{%- endif -%}
+  {%- if win_start < 0 -%}{%- assign win_start = 0 -%}{%- endif -%}
+{%- endif -%}
+{%- assign top_start = 0 -%}
+{%- if fav_pos > 0 -%}{%- assign top_start = win_start -%}{%- endif -%}
+{%- assign half = standings.size | plus: 1 | divided_by: 2 -%}
+
+{%- capture subtitle -%}{%- if season -%}{{ season }} · {% endif -%}Matchday {{ matchday }}{%- endcapture -%}
+
+{%- comment -%}
+  Standings table. Params: standings, start, count, wdl (W/D/L columns), gd (GD column), size (table size
+  classes), crest (crest size classes), fav_pos, zone_direct, zone_playoff.
+{%- endcomment -%}
+{% template standings_table %}
+<table class="table {{ size }}" data-table-limit="true">
+  <thead>
+    <tr>
+      <th><span class="title title--small"></span></th>
+      <th class="w--full pl--2"><span class="title title--small">Club</span></th>
+      {%- if wdl %}
+      <th class="text--right pl--4"><span class="title title--small">W</span></th>
+      <th class="text--right pl--4"><span class="title title--small">D</span></th>
+      <th class="text--right pl--4"><span class="title title--small">L</span></th>
+      {%- endif %}
+      {%- if gd %}
+      <th class="text--right pl--4"><span class="title title--small">GD</span></th>
+      {%- endif %}
+      <th class="text--right pl--4"><span class="title title--small">Pts</span></th>
+    </tr>
+  </thead>
+  <tbody>
+    {%- for t in standings limit: count offset: start %}
+    {%- assign hl = "" -%}
+    {%- if t.position == fav_pos -%}{%- assign hl = " label--inverted" -%}{%- endif -%}
+    {%- capture pos_key -%},{{ t.position }},{%- endcapture -%}
+    {%- assign zone = "" -%}
+    {%- if zone_direct contains pos_key -%}{%- assign zone = "bg--gray-65" -%}
+    {%- elsif zone_playoff contains pos_key -%}{%- assign zone = "bg--gray-75" -%}{%- endif %}
+    <tr>
+      <td class="{{ zone }}"><span class="label text--bold">{{ t.position }}</span></td>
+      <td class="pl--2 {{ zone }}">
+        <div class="flex flex--row flex--left flex--center-y gap--small">
+          {%- if t.logo %}<img class="image image-dither {{ crest }} no-shrink" src="{{ t.logo }}" alt="">{% endif %}
+          <span class="label{{ hl }}" data-clamp="1">{{ t.name }}</span>
+        </div>
+      </td>
+      {%- if wdl %}
+      <td class="text--right pl--4 {{ zone }}"><span class="label">{{ t.wins }}</span></td>
+      <td class="text--right pl--4 {{ zone }}"><span class="label">{{ t.draws }}</span></td>
+      <td class="text--right pl--4 {{ zone }}"><span class="label">{{ t.losses }}</span></td>
+      {%- endif %}
+      {%- if gd %}
+      <td class="text--right pl--4 {{ zone }}"><span class="label">{% if t.goal_difference > 0 %}+{% endif %}{{ t.goal_difference }}</span></td>
+      {%- endif %}
+      <td class="text--right pl--4 {{ zone }}"><span class="label text--bold{{ hl }}">{{ t.points }}</span></td>
+    </tr>
+    {%- endfor %}
+  </tbody>
+</table>
+{% endtemplate %}
+
+{%- comment -%} Legend for the shaded zones. Params: league. {%- endcomment -%}
+{% template zone_legend %}
+<div class="flex flex--row flex--center-x flex--center-y gap--large w--full">
+  {%- if league == "kkd" %}
+  <div class="flex flex--row flex--center-y gap--small"><span class="w--4 h--4 rounded--xsmall bg--gray-65"></span><span class="label label--small">Promotion</span></div>
+  {%- else %}
+  <div class="flex flex--row flex--center-y gap--small"><span class="w--4 h--4 rounded--xsmall bg--gray-65"></span><span class="label label--small">Champions League</span></div>
+  <div class="flex flex--row flex--center-y gap--small"><span class="w--4 h--4 rounded--xsmall bg--gray-75"></span><span class="label label--small">CL qualifying</span></div>
+  <div class="flex flex--row flex--center-y gap--small"><span class="w--4 h--4 rounded--xsmall bg--gray-75"></span><span class="label label--small">Relegation play-offs</span></div>
+  <div class="flex flex--row flex--center-y gap--small"><span class="w--4 h--4 rounded--xsmall bg--gray-65"></span><span class="label label--small">Relegation</span></div>
+  {%- endif %}
+</div>
+{% endtemplate %}
+
+{% template empty_state %}
+<div class="flex flex--col flex--center stretch-y gap--small text--center">
+  <span class="title">No standings yet</span>
+  <span class="description">They appear after the next refresh.</span>
+</div>
+{% endtemplate %}
+
+{% template league_title_bar %}
+<div class="title_bar">
+  <img class="{{ logo_class }}" src="{{ league_logo }}" alt="">
+  <span class="title">{{ league_name }}</span>
+  <span class="instance">{{ subtitle }}</span>
+</div>
+{% endtemplate %}

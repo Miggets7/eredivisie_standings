@@ -61,6 +61,26 @@ goal difference, points and `logo`, the club crest URL from the source site), `l
 `season` (e.g. `2026/2027`, turning over on 1 July). The season follows the date, not the data: until
 the leagues publish the new table, the previous season's final standings carry the new label.
 
+## TRMNL Recipe
+
+The published recipe [Eredivisie & Keuken Kampioen Divisie](https://trmnl.com/recipes/124580) polls this
+service. `trmnl/` holds a copy of its files in TRMNL's recipe format:
+
+- `settings.yml` — strategy, polling URL, refresh interval, framework version and the form fields
+  (League, Favourite club)
+- `shared.liquid` — zones, matchday, favourite club and the table, legend and title bar templates
+- `full.liquid`, `half_horizontal.liquid`, `half_vertical.liquid`, `quadrant.liquid` — one file per view
+
+The recipe on TRMNL is the live version. After changing the markup or settings in the TRMNL dashboard,
+export the files again and commit them here.
+
+The polling URL in `settings.yml` contains `api_key=[set]`, the placeholder TRMNL exports in place of
+the real key. When restoring from these files, re-enter the real key in the plugin settings, or the
+recipe fails with 403.
+
+The zone shading in `shared.liquid` follows the legends on eredivisie.nl and keukenkampioendivisie.nl.
+The European places depend on the UEFA country ranking, so check them before each season.
+
 ## Development
 
 ### Adding New Features

@@ -33,6 +33,7 @@ docker run -p 8000:8000 -e API_KEY="your_api_key" eredivisie-standing
 │       ├── eredivisie.rs    # Eredivisie scraper (eredivisie.nl, HTML table)
 │       └── kkd.rs           # KKD scraper (keukenkampioendivisie.nl, __NEXT_DATA__ JSON with HTML table fallback)
 ├── tests/fixtures/          # Trimmed real standings pages used by the parser unit tests
+├── trmnl/                   # Copy of TRMNL recipe 124580: settings.yml, shared.liquid and one .liquid per view
 ├── Dockerfile               # Multi-stage build: cargo-chef dependency caching, mold linker
 ├── .dockerignore            # Allowlist: only Cargo.toml, Cargo.lock, src/ reach the build context (add new COPY sources here)
 ├── build_and_export.sh      # Builds linux/amd64 image, slims it with slimtoolkit, exports both as .tar
@@ -86,3 +87,6 @@ Core: `axum`, `tokio`, `reqwest`, `scraper`, `serde`/`serde_json`, `subtle`, `to
 - The scrapers share the row/selector/cell helpers in `scraper/mod.rs`; column layouts and separators differ per league
 - Use `i32` for numeric fields (goal difference and points can be negative)
 - No linting or formatting tools are configured beyond `cargo fmt` / `cargo clippy`
+- `trmnl/` mirrors TRMNL recipe 124580; the recipe on TRMNL is the live version. Keep the two in sync: after editing markup on TRMNL, export it here, and after changing response fields here, update the markup there. Never commit the real API key; `settings.yml` keeps TRMNL's `api_key=[set]` placeholder
+- The markup reads `standings[].logo`, `season` and `games` (matchday) from the API, and uses TRMNL framework 3.4 classes; check https://trmnl.com/framework/docs/3.4 before changing it
+- Zone shading (Champions League, promotion, relegation) is hard-coded per league in `trmnl/shared.liquid` and needs a check each season
